@@ -1,0 +1,3 @@
+a[href*="twitter"],a[href*="facebook"]{
+    display: none;
+}

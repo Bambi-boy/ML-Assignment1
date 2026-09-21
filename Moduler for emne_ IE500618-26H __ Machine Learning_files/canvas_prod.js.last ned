@@ -1,0 +1,670 @@
+const h5pScript=document.createElement('script');
+h5pScript.setAttribute('charset','UTF-8');
+h5pScript.setAttribute('src','https://h5p.com/canvas-resizer.js');
+document.body.appendChild(h5pScript);
+
+async function fetchApi(url) {
+    // console.log("url",`${location.origin}${url}`)
+    const response = await fetch (`${location.origin}${url}`)
+    const data = await response.json()
+    return data
+}
+
+if (ENV.current_user_types.includes('Lokal administrator') && /\/accounts\/\d+(?:\?)?$/.test(location) ) {
+    console.log("BRUKER ER LOKAL ADMINISTRATOR")
+    console.log("BRUKER ER INNE PÅ COURSES/EMNER")
+    const faculties = [333,300,284,285,288,343,312,294,352,324]
+    const account_id = ENV.ACCOUNT_ID;
+
+
+function getNextUrl(linkHeader) {
+  if (!linkHeader) return null;                 // no Link header at all
+  // The header can contain several comma‑separated links:
+  // <https://...>; rel="next", <https://...>; rel="prev"
+  const links = linkHeader.split(',').map(part => part.trim());
+
+  for (const link of links) {
+    const match = link.match(/^<([^>]+)>;\s*rel="([^"]+)"$/);
+    if (match && match[2] === 'next') {
+      return match[1];                          // the URL we need
+    }
+  }
+  return null;                                  // no “next” link found
+}
+
+
+async function fetchAllManageableAccounts(u) {
+  const allAccounts = [];
+  let url = u;
+  let nextUrl = null;      // will hold the URL for the next page
+
+  do {
+    // ---- make the request -------------------------------------------------
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+    }
+
+    const pageData = await response.json();  // assuming JSON array/object
+    allAccounts.push(...pageData);
+
+    const linkHeader = response.headers.get('link'); // note: lowercase key works too
+    nextUrl = getNextUrl(linkHeader);
+
+    url = nextUrl;
+  } while (nextUrl !== null);   // keep looping while a next link exists
+
+  return allAccounts;
+}
+
+
+    console.log("kontoid",account_id)
+
+    
+    console.log(`Account id: ${account_id}, finnes i faculties? ${faculties.includes(Number(account_id))}`)
+
+    if (faculties.includes(Number(account_id))) {
+        // const root = fetchApi('/api/v1/accounts/1/sub_accounts')
+        // root.then(data => console.log(data[0]))
+
+
+
+        // const sub_accounts = `/api/v1/accounts/${account_id}/sub_accounts`
+        // const subs = fetchApi(sub_accounts)
+
+        const u = `${location.origin}/api/v1/manageable_accounts?per_page=100`;
+        let facs = [];
+        const accounts = fetchAllManageableAccounts(u).then(data=>{
+            console.log(data.length);
+            data.forEach(d=>{
+        
+                if (d.parent_account_id === Number(account_id) && (/^Institutt/.test(d.name))) {
+                facs.push(d)
+            }});
+            console.log("facs:",facs)
+            let menu;
+        if(facs.length > 0){
+            let rsw = document.querySelector('#right-side-wrapper')
+            rsw.style.display = 'block';
+                //rsw.innerText = 'WRAPPER'
+            // rsw.style.left = '14rem'
+            let rs = document.querySelector('#right-side')
+            menu = document.createElement('div')
+            let h2 = document.createElement('h2')
+            h2.id = 'h2_sub_accounts'
+            // h2.textContent = 'UNDERKONTOER'
+            menu.innerText = "UNDERKONTOER"
+            menu.id = 'sub_accounts'   
+            rs.appendChild(menu)
+            menu.appendChild(h2) 
+        }
+        
+        // subs.then(data => {
+        //     console.log("subs",data)
+            let regex = /::/ ///^ST/
+        //     // console.log("regex good? " + regex.test(data[0].name))
+            facs.forEach(sub => {
+                if (!regex.test(sub.name)) {
+                    let a = document.createElement('a');
+                    a.innerText = sub.name;
+                    a.href = '/accounts/' + sub.id;
+                    a.id = 'a_account' + sub.id;
+                    a.classList.add('btn','button-sidebar-wide')
+                    menu.appendChild(a)
+                } else  {
+                    console.log(sub.name + ' er ikke et fakultet eller institutt.')
+                }
+
+            })
+        }).catch(e => {
+            console.error("Noe gikk feil")
+            console.error(e)
+        })
+    }
+}  
+
+// Modulmeny fra UiO
+if(/\/courses\/\d+\/pages/gm.test(location.pathname)){
+    const account_id = ENV.ACCOUNT_ID
+    const approved_account_ids = ['431','291','289','341','4789','4790','4110','4109','4791','4792','2202'];
+    let parentAccountId;
+
+    const account = fetchApi(`/api/v1/accounts/${account_id}`).then(data=>{
+        parentAccountId = data.parent_account_id
+        // console.log("data.parent_account_id (i funksjon):", data.parent_account_id)
+        // console.log("parentaccountid (i funksjon):", parentAccountId)
+
+
+    console.log("underkontoid:",account_id,"parent:",parentAccountId)
+    if (approved_account_ids.includes(account_id) || approved_account_ids.includes(parentAccountId.toString())) {
+        // console.log("kontoid er på listen, velkommen.")
+
+        'use strict';
+
+        if (!ENV.COURSE_ID) ENV.COURSE_ID = /\/courses\/(\d+)/.exec(location.pathname)[1];
+        let uio_entireCourseStructure = {modules:{}};
+        let uio_menuconfig = {
+            itemsymbols: true,
+            colors: [
+                "0, 80, 158"
+            ],
+        }
+
+        async function Get(last_part_of_url){
+            //Does a Canvas API call and returns a JS-object.
+            let url = location.origin+'/api/v1/'+last_part_of_url
+            if (url.indexOf('?')==-1) url+='?per_page=100';
+            else if (url.indexOf('per_page=')==-1) url+='&per_page=100';
+            let response = await fetch(url);
+
+            return response.json();
+        }
+
+        async function uioGetEntireStructure (){
+            //load all modules and items
+            let modules = await Get (`courses/${ENV.COURSE_ID}/modules?include[]=items`)
+            for (let module of modules){
+                if (module.items?.length == 0)
+                    module.items = await Get (`courses/${ENV.COURSE_ID}/modules/${module.id}/items`)
+            }
+            return modules;
+        }
+
+        function ModuleLabel(position){
+            return position
+        }
+
+        function getCurrentPosition(modules){
+            // console.log("modul index 0",modules[0])
+            let itemid = false, possibleItemid = false, possibleModule = false, itemidUnsafe = false
+            // console.log("menu=off?",location.search.indexOf('menu=off'))
+            // if (location.search.indexOf('menu=off') !=-1) {return false}
+            let pathname = (location.search.indexOf('useURL=')==-1)?location.pathname:/useURL=([^&?]*)/.exec(location.search)[1]
+            let match = /courses\/\d+\/modules\/items\/(\d+)$/.exec(pathname);
+            // console.log("match:",match)
+            if (match) {itemid = match[1]}
+            else {
+                match = /module_item_id=(\d+)/.exec(location.search);
+                // console.log("match (else)",match)
+                if (match){
+                    itemid = match[1]
+                    itemidUnsafe = true //a link from another page can have wrong module_item_id and still show the correct page
+                }
+            }
+            for (const module of modules){
+                for (const item of module.items){
+                    if (itemid && !itemidUnsafe && item.id == itemid) return {module:module.position, item:item.id}
+                    match = /\/courses.*/.exec(item.url)
+                    if (match && match[0] == pathname){
+                        //When the path match we have found the correct page, but a page can be linked more than one place, so also check itemid
+                        if (!itemid || item.id == itemid) return {module:module.position, item:item.id}
+                        else {
+                            //We have a matching page, but the unsafe moduleid doesn't match
+                            possibleModule = module.position
+                            possibleItemid = item.id
+                        }
+                    }
+                }
+            }
+            if (possibleItemid) return {module:possibleModule, item:possibleItemid}
+            return false
+        }
+
+        function uioMakeModuleMenu (modules,moduleposition){
+            let html = '<div class="modulemenu">'
+            for (const module of modules){
+                let unpublished = (module.published == false)?' unpublished':''
+                let active = (module.position == moduleposition)?' active':''
+            html += `<div class="modulebutton module${module.position}${unpublished}${active} ${module.state}" data-module="${module.position}">${ModuleLabel(module.position)}</div>`
+        }
+            return html + '</div>'
+        }
+
+        function uioMakeItemMenu (module,itemId){
+            function makeItemSymbol(itemtype){
+                switch(itemtype){
+                    case 'Page': return '<i class="icon-document"></i>'
+                    case 'ExternalUrl':
+                    case 'ExternalTool': return '<i class="icon-link"></i>'
+                    case 'Discussion': return '<i class="icon-discussion"></i>'
+                    case 'File': return '<i class="icon-paperclip"></i>'
+                    case 'Quiz': return '<i class="icon-quiz icon-Solid"></i>'
+                    case 'Assignment': return '<i class="icon-assignment"></i>'
+                    default: return ''
+                }
+            }
+            let items = module.items
+            //Make the items menu for the module
+            // console.log (module)
+
+
+
+            let itemsymbol = ''
+            let completesymbol = ''
+            let html = '<ul>'
+            for (let index=0; index<items.length; index++){
+                if (items[index].type == 'SubHeader'){
+                    html += `<li class="header indent${items[index].indent}"><span class="content">${items[index].title}</span></li>`
+                    continue
+                }
+                html += `<li class="${items[index].type} indent${items[index].indent}`
+                if (items[index].id == itemId) html += ' active'
+                if (typeof items[index].completion_requirement !== 'undefined'){
+                    if (items[index].completion_requirement.completed) html += ' complete'
+                    else html += ' incomplete'
+                }else{
+                    html += ' optional'
+                }
+                if (!items[index].published) html += ' unpublished'
+                html += '">'
+                if (uio_menuconfig?.itemsymbols){
+                    itemsymbol = makeItemSymbol(items[index].type)
+                }
+                if (items[index].id == itemId) html += `<span class="content">${itemsymbol}${items[index].title}</span>`
+                else html += `<a href="${items[index].html_url}"><div class="content">${itemsymbol}${items[index].title}</div></a>`
+                html += '</li>'
+            }
+            html += '</ul>'
+
+            return `<div class="itemmenu module${module.position}"><div class="modulename">${module.name}</div>${html}</div>`
+        }
+
+        function makeMenu(modulehtml,itemhtmlArray,position){
+            let nav = document.createElement('div')
+            nav.id = "rightsidemodulemenu"
+            nav.innerHTML = `<nav id="modulenavigation">${modulehtml}<div id="itemmenu">${itemhtmlArray[position.module-1]}</div></nav>`
+            document.getElementById('right-side-wrapper').style.display = "block"
+            let sidepanel = document.getElementById('right-side')
+            sidepanel.prepend(nav)
+            sidepanel.style.display = "block"
+        }
+        function makeFrontPageCSS(){
+            let css = `
+            div.frontpagemenu.icon {
+                color: white;
+                font-weight: bold;
+                font-size: x-large;
+                padding: 0.5rem 1rem;
+                margin-right: 1rem;
+                margin-bottom: 0.5rem;
+                border-radius: 10px;
+            }
+            div.frontpagemenu.text {
+                font-size: large;
+                align-self: center;
+            }
+            div.frontpagemenuitem {
+                cursor: pointer;
+                background-color: white;
+            }
+            `
+            for (let i=0;uio_entireCourseStructure[i];i++){
+                    let module = uio_entireCourseStructure[i]
+                    // let color = uio_menuconfig.colors[i]
+                    let color = uio_menuconfig.colors[0]
+                    css += `div.frontpagemenu.module${module.position} {background: linear-gradient(rgb(${color}),rgba(${color}, 0.65));}
+                    `
+            }
+
+            let style = document.createElement('style')
+            style.type = 'text/css'
+            style.textContent = css
+            document.head.append(style)
+        }
+
+        function makeCSS(activemodule, nummodules){
+            function colorCSS(module,activemodule,color){
+                let css = `
+                div.modulemenu div.module${module} {
+                    background: linear-gradient(rgb(${color}),rgba(${color}, 0.65));
+                }
+                div.itemmenu.module${module} div.modulename {
+                    background: linear-gradient(rgb(${color}),rgba(${color}, 0.65));
+                    color: white;
+                }
+                div.itemmenu.module${module} {
+                    background-color: rgba(${color}, 0.1)
+                }
+                div.itemmenu.module${module} li.header {
+                    background: linear-gradient(rgb(${color}),rgba(${color}, 0.65));
+                    color: white;
+                    font-weight: bold;
+                }
+                div.itemmenu.module${module} li.active {
+                    background-color: rgba(${color}, 0.2)
+                }
+                div.itemmenu.module${module} li:hover {
+                    background-color: rgba(${color}, 0.1)
+                }
+                div.itemmenu.module${module} ul li i {
+                    color: rgba(${color}, 0.8);
+                }
+
+                div.itemmenu.module${module} ul li.complete::after {
+                        stroke: rgba(${color}, 0.8); /* Box border color */
+                        fill: none;  /* No fill color */
+                }
+                div.itemmenu.module${module} ul li.incomplete::after {
+                        stroke: rgba(${color}, 0.8); /* Box border color */
+                        fill: none;  /* No fill color */
+                }
+                `
+                if (module == activemodule){
+                    css += `
+                    h1.page-title {
+                        border-image: linear-gradient(to right, rgb(${color}),rgba(${color}, 0)) 27;
+                        border-width: 0 0 10px 0;
+                        border-style: solid;
+                    }
+                    div.darkbox {
+                        background: linear-gradient(rgb(${color}),rgba(${color}, 0.65));
+                        border: 2px solid rgb(${color});
+                        border-radius: 5px;
+                        color: white;
+                    }
+                    svg.modulemenu {
+                        fill: rgb(${color});
+                    }
+                    div.refleksjonsboks {
+                        border-radius: 10px;
+                        border-top: 10px solid rgb(${color}); 
+                        background: rgba(${color}, 0.1);
+                        padding: 10px;
+                        margin-bottom: 10px;
+                    }
+                    div.uio-color-box-1 {
+                        border-top: 10px solid rgb(${color});
+                    background-color: rgba(${color}, 0.1);
+
+                    }
+                    div.uio-color-box-2 {
+                    border-top: 10px solid rgba(${color}, 0.7);
+                    background-color: rgba(${color}, 0.1);
+                    }
+                    div.uio-color-box-3 {
+                    border-top: 10px solid rgba(${color}, 0.2);
+                    border-bottom: 5px solid rgba(${color}, 0.2);
+                    }
+                    div.modulebutton.active.undefined{
+                        background: linear-gradient(white);
+                        color: rgb(0,80,158);
+                        outline: 1px solid rgb(0,80,158);
+                    }
+                    `
+
+                }
+                return css
+            }
+
+            let css = `
+                    div.modulemenu {
+                        display: flex;
+                        flex-wrap: wrap;
+                    }
+                    div.modulemenu>div {
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        border-radius: 5px;
+                        color: white;
+                        padding: 5px;
+                        margin: 2px;
+                        min-width: 1rem;
+                        cursor: pointer;
+                        user-select: none;
+                    }
+                    div.itemmenu div.modulename {
+                        font-weight: bold;
+                        padding: 5px 5px 5px 5px !important;
+                    }
+                    div.itemmenu ul {
+                        margin-left: 0px;
+                        list-style-type: none;
+                        border-radius: 3px;
+                    }
+                    div.itemmenu ul ul {
+                        border: none;
+                    }
+                    div.itemmenu ul li {
+                        margin-left: 0px;
+                        padding: 5px !important;
+                        text-align: left;
+                        border-bottom: 1px solid White;
+                        /* white-space: nowrap */
+                    }
+                    div.itemmenu li.indent0 .content {
+                    margin-left: 0px;
+                    }
+                    div.itemmenu li.indent1 .content {
+                    margin-left: 20px;
+                    }
+                    div.itemmenu li.indent2 .content {
+                    margin-left: 40px;
+                    }
+                    div.itemmenu li.indent3 .content {
+                    margin-left: 60px;
+                    }
+                    div.itemmenu li.indent4 .content {
+                    margin-left: 80px;
+                    }
+                    div.itemmenu li.indent5 .content {
+                    margin-left: 100px;
+                    }
+                    div.itemmenu ul li a {
+                            color: Black;
+                            text-decoration: none;
+                    }
+                    div.itemmenu ul li i {
+                    margin-right: 10px;
+                    }
+                    div.hamburgermenuparent {
+                    position: relative;
+                    padding-left: 20px;
+                    }
+                    #mobileburgerposition #itemmenu li a *{
+                    color: black !important
+                    }
+                    #mobileburgerposition #itemmenu li.active *{
+                    color: black !important
+                    }
+
+            `
+
+            for (let i=0;i<nummodules;i++){
+                // css += colorCSS(i+1, activemodule, uio_menuconfig.colors[i])
+                css += colorCSS(i+1, activemodule, uio_menuconfig.colors[0])
+            }
+            // console.log (css)
+            let style = document.createElement('style')
+            style.type = 'text/css'
+            style.textContent = css
+            document.head.append(style)
+        }
+        function uioHamburgerMenu(anchortag){
+            anchortag.insertAdjacentHTML('afterbegin',`<div class="hamburgermenuparent"><svg class="modulemenu uiohamburgermenu" height="32px" id="Layer_1" style="enable-background:new 0 0 32 32;" version="1.1" viewBox="0 0 32 32" width="32px" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+            <path d="M4,10h24c1.104,0,2-0.896,2-2s-0.896-2-2-2H4C2.896,6,2,6.896,2,8S2.896,10,4,10z M28,14H4c-1.104,0-2,0.896-2,2  s0.896,2,2,2h24c1.104,0,2-0.896,2-2S29.104,14,28,14z M28,22H4c-1.104,0-2,0.896-2,2s0.896,2,2,2h24c1.104,0,2-0.896,2-2  S29.104,22,28,22z"/></svg>
+            <div id="hamburgermenucontainer"></div></div>`)
+            let hamburgercontainer = anchortag.querySelector('#hamburgermenucontainer')
+            hamburgercontainer.append(document.getElementById('modulenavigation'))
+            hamburgercontainer.style.display = "none"
+            let menuicon = anchortag.querySelector('svg.uiohamburgermenu')
+            menuicon.style.cursor = "pointer"
+
+            menuicon.onclick = ()=>{
+                if (hamburgercontainer.style.display == "none"){
+                    let style = hamburgercontainer.style
+                    style.display = "block"
+                    style.position = "absolute"
+                    style.right = 0
+                    style.zIndex = 99;
+                    style.backgroundColor = "white"
+                    style.width = "260px"
+                    style.padding = "10px"
+                } else hamburgercontainer.style.display = "none"
+            }
+
+        }
+
+        function checkRightpos(){
+            let greatgrandparent = document.getElementById('modulenavigation').parentElement.parentElement.parentElement
+            let menulocation
+            if (greatgrandparent.id == 'right-side-wrapper') menulocation = 'right-side'
+            else if (greatgrandparent.classList.contains('right-of-crumbs')) menulocation = 'crumbs'
+            else menulocation = 'mobile'
+            let rightAtRight = document.getElementById('right-side-wrapper').getBoundingClientRect().y < 100
+            let mobileheader = !(document.getElementById('mobile-header').offsetParent === null)
+            //return if menu is in the correct spot
+            if ((rightAtRight && menulocation == 'right-side') ||
+                (!rightAtRight && !mobileheader && menulocation == 'crumbs') ||
+                (mobileheader && menulocation == 'mobile')){
+                //no change
+                return
+            }
+            //move menu to right if rightAtRight
+            if (rightAtRight){
+                document.getElementById('rightsidemodulemenu').append(document.getElementById('modulenavigation'))
+                console.log (document.getElementsByClassName('hamburgermenuparent'))
+                document.getElementsByClassName('hamburgermenuparent')[0]?.remove()
+                console.log (document.getElementsByClassName('hamburgermenuparent'))
+                return
+            }
+            //move menu to mobileheader if mobileheader
+            if (mobileheader){
+                //let mobilespace = document.getElementsByClassName('mobile-header-space')[1]
+                let mobilespace = document.getElementById('mobileburgerposition')
+                uioHamburgerMenu(mobilespace)
+                mobilespace.querySelector('svg').style.fill = "white"
+                document.querySelector('div.right-of-crumbs div.hamburgermenuparent')?.remove()
+                return
+            }
+            console.log (menulocation)
+            //move menu to crumbs if you got here
+            let crumbs = document.getElementsByClassName('right-of-crumbs')?.[0]
+            uioHamburgerMenu(crumbs)
+            document.querySelector('#mobileburgerposition div.hamburgermenuparent')?.remove()
+        }
+
+        function uioFrontPage(){
+            if (!document.getElementById('content')?.textContent.trim().length){
+                setTimeout(uioFrontPage, 500)
+                return
+            }
+            if (ENV.WIKI_PAGE?.front_page && document.getElementById('uioFrontpageMenu')){
+                makeFrontPageCSS()
+                console.log (uio_entireCourseStructure)
+                console.log ("frontpage")
+
+                let html = '<div style="display: flex; flex-direction: column;">'
+                for (let i=0;uio_entireCourseStructure[i];i++){
+                //for (const module of uio_entireCourseStructure.modules){
+                    let module = uio_entireCourseStructure[i]
+                    html += `<div id="frontpagemenu${i}" class="frontpagemenuitem" style="display: flex;"><div class="frontpagemenu icon module${module.position}">${module.position}</div><div class="frontpagemenu text">${module.name}</div></div>`
+                    //<a href="${module.items[0]?.url}">
+
+                }
+                html += '</div>'
+                document.getElementById('uioFrontpageMenu').innerHTML = html
+                for (let i=0;uio_entireCourseStructure[i];i++){
+                    let menuitem = document.getElementById('frontpagemenu'+i)
+                    let pageurl = uio_entireCourseStructure[i].items.filter(item => typeof item.html_url !== 'undefined')[0]?.html_url
+                    if (pageurl){
+                        menuitem.onclick = (e)=>{
+                            open(pageurl,"_self")
+                        }
+                    }
+                }
+            }
+        }
+
+        async function uioRightmenu(){
+            let modules = await uioGetEntireStructure()
+            // console.log ("line 553",modules)
+            let position = getCurrentPosition(modules)
+            // console.log ("POSITION")
+            // console.log (position)
+            if (position){
+                makeCSS (position.module, modules.length)
+                let itemhtmlArray = []
+                for (let i=0; i<modules.length;i++){
+                    itemhtmlArray.push(uioMakeItemMenu(modules[i],position.item))
+                }
+                let modulehtml = uioMakeModuleMenu(modules,position.module)
+                //let itemhtml = uioMakeItemMenu(modules[position.module-1],position.item)
+                makeMenu(modulehtml,itemhtmlArray,position)
+                for (const modulebutton of [...document.querySelectorAll('div.modulebutton')]){
+                    modulebutton.onclick = (e)=>{
+                        let moduleindex = parseInt(e.target.dataset.module)-1
+                        let url = modules[moduleindex].items[0]?.html_url
+                        if (url) window.open(url,"_self")
+                    }
+                    modulebutton.onmouseover = (e)=>{
+                        let moduleindex = parseInt(e.target.dataset.module)-1
+                        let itemmenu = document.getElementById('itemmenu')
+                        itemmenu.innerHTML = itemhtmlArray[moduleindex]
+                    }
+                }
+                let modulenavigation = document.getElementById('modulenavigation')
+                modulenavigation.onmouseleave = (e)=>{
+                    let itemmenu = document.getElementById('itemmenu')
+                    itemmenu.innerHTML = itemhtmlArray[position.module-1]
+                }
+                document.getElementById('mobile-header').insertAdjacentHTML('beforeend','<div id="mobileburgerposition"> </div>')
+                setInterval(checkRightpos,200)
+
+            }else console.warn("Couldn't find position for right menu.")
+        uioFrontPage()    
+        }
+
+        uioRightmenu();
+
+    }}
+        ).catch(e => {
+                console.error("Noe gikk feil med parentId")
+                console.error(e)
+    });
+    } else {
+        // console.log("pathname inneholder ikke 'pages'.")
+}
+
+(function () {
+    'use strict'
+  // Only execute on the course users/people page
+  if ((!/^\/courses\/\d+\/users/.test(window.location.pathname)) || !(ENV.SECTIONS.some(s => s.name === 'Seksjon for manuelt tillagte brukere'))) return;
+
+  const CONFIG = {
+    targetSectionName: "Seksjon for manuelt tillagte brukere"
+  };
+
+  const setComboboxValue = (mutations, observer) => {
+    const sectionInput = document.querySelector('input[role="combobox"][aria-label*="Section"], input[role="combobox"][id*="section"]');
+    if (sectionInput && !sectionInput.dataset.defaultSet) {
+
+      observer.disconnect();
+      sectionInput.focus();
+      sectionInput.click();
+
+      setTimeout(() => {
+        const options = Array.from(document.querySelectorAll('[role="option"], [id*="option"]'));
+
+        const match = options.find(opt => opt.textContent.trim() === CONFIG.targetSectionName);
+
+        if (match) {
+          match.click();
+
+          sectionInput.dataset.defaultSet = "true";
+        } else {
+          sectionInput.blur();
+        }
+
+        observer.observe(document.body, { childList: true, subtree: true });
+      }, 150);
+    }
+  };
+
+  const observer = new MutationObserver(setComboboxValue);
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+})();
