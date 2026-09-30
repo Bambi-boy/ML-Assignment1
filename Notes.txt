@@ -1,0 +1,22 @@
+Important collums: Overall Cond, Year Built, Year Remod/Add, 
+Gr Liv Area, (Full Bath, Half Bath)->consider combining,Kitchen AbvGr,
+Bedroom AbvGr, TotRms AbvGrd, Fireplaces, Open Porch SF, Wood Deck SF,
+Enclosed Porch, 3Ssn Porch Area, Screen Porch, Poll Area, 
+
+
+Collums for changing ranges: Exter Qual(Ex = Excellent; Gd = Good; TA = Typical/Average; Fa = Fair), 
+Exter Cond(Ex = Excellent; Gd = Good; TA = Typical/Average;
+ Fa = Fair; Po = Poor), 
+Heating QC, Kitchen Qual, Lot Shape, Utilities, Land Slope,
+ Foundation(BrkTil = Brick and tile;
+  CBlock = Concrete block;
+ PConc = Poured concrete;
+ Slab = Slab; Stone = Stone; Wood = Wood)
+ Central Air(Yes, No)
+ Functional
+ Kitchen Qual(Ex = Excellent; 
+ Gd = Good; TA = Typical/Average; Fa = Fair; Po = Poor)
+ Typ = Typical functionality; Min1 = Minor deductions 1; Min2 = Minor deductions 2;
+  Mod = Moderate deductions;
+   Maj1 = Major deductions 1; Maj2 = Major deductions 2;
+    Sev = Severely damaged; Sal = Salvage only
